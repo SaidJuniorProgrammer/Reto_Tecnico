@@ -7,9 +7,9 @@ Este repositorio contiene la solución completa al reto técnico de sistemas dis
 ## 👥 Datos del Equipo
 
 - **Integrantes**:
-  - [Nombre Integrante 1]
-  - [Nombre Integrante 2]
-  - [Nombre Integrante 3]
+  - Said Fausto Pinto Tamayo
+  - Oscar Jordan Gonzabay Muñoz
+  - Estalin Gabriel Jaen Garcia
 - **Repositorio**: https://github.com/SaidJuniorProgrammer/Reto_Tecnico.git
 - **Video Demostrativo (3 a 5 min)**: `[Enlace al video en YouTube / Drive / Loom]`
 
