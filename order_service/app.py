@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from database import (
     init_db,
     get_product,
@@ -28,29 +28,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 init_db()
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Idempotency-Key"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
 
 PAYMENT_SERVICE_URL = os.environ.get("PAYMENT_SERVICE_URL", "http://127.0.0.1:5002")
 PAYMENT_TIMEOUT_SECONDS = float(os.environ.get("PAYMENT_TIMEOUT_SECONDS", "2.0"))
 
 @app.route("/", methods=["GET"])
 def index():
-    return jsonify({
-        "service": "Order API",
-        "status": "ONLINE",
-        "message": "Servicio de Pedidos y Gestion de Idempotencia activo.",
-        "endpoints": {
-            "GET /health": "Verificar salud del servicio",
-            "GET /products": "Consultar catalogo y stock en tiempo real",
-            "POST /orders": "Crear pedido con clave de idempotencia (Header Idempotency-Key)",
-            "GET /orders": "Listar todos los pedidos",
-            "GET /orders/<id>": "Consultar detalle de un pedido",
-            "POST /orders/<id>/reconcile": "Reconciliar pedido en PAGO_INCIERTO",
-            "GET /reservations": "Listar reservas de stock",
-            "POST /admin/reset": "Reiniciar base de datos a estado inicial"
-        }
-    }), 200
+    accept = request.headers.get("Accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return jsonify({
+            "service": "Order API",
+            "status": "ONLINE",
+            "message": "Servicio de Pedidos y Gestion de Idempotencia activo."
+        }), 200
+    return render_template("index.html")
+
+@app.route("/mock-payments", methods=["GET"])
+def proxy_mock_payments():
+    try:
+        r = requests.get(f"{PAYMENT_SERVICE_URL}/payments", timeout=2.0)
+        return jsonify(r.json()), r.status_code
+    except Exception as e:
+        return jsonify({"count": 0, "payments": [], "error": str(e)}), 200
 
 @app.route("/favicon.ico", methods=["GET"])
 def favicon():

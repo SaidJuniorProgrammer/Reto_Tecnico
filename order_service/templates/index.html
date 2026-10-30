@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Reto Técnico: Pedidos, Pagos e Idempotencia</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+    <!-- Navbar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-bold text-xl">
+                    <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg text-white leading-tight">Reto Técnico: Pedidos, Pagos e Idempotencia</h1>
+                    <p class="text-xs text-slate-400">Arquitectura Resiliente en Flask & SQLite</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3 text-xs">
+                <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span class="font-medium text-slate-300">Order API :5001</span>
+                </div>
+                <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+                    <span class="font-medium text-slate-300">Payment Mock :5002</span>
+                </div>
+                <button onclick="resetDatabase()" class="px-3 py-1.5 bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-500/30 rounded-lg transition font-medium flex items-center space-x-1">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Reset DB</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Barra de Inventario en Tiempo Real -->
+        <section>
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-stacked text-indigo-400"></i> Inventario de Productos (orders.db)
+                </h2>
+                <button onclick="loadAllData()" class="text-xs text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1">
+                    <i class="fa-solid fa-arrows-rotate"></i> Actualizar
+                </button>
+            </div>
+            <div id="products-container" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Se puebla dinámicamente con JS -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 animate-pulse">Cargando catálogo...</div>
+            </div>
+        </section>
+
+        <!-- Botones de Acción Rápida (Los 5 Casos de la Rúbrica) -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-play text-emerald-400"></i> Ejecución Rápida de los 5 Casos de Evaluación
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <button onclick="runQuickCase(1)" class="p-3 bg-slate-800 hover:bg-emerald-600/20 border border-slate-700 hover:border-emerald-500/50 rounded-xl text-left transition group">
+                    <div class="text-xs font-bold text-emerald-400 group-hover:text-emerald-300">Caso 1</div>
+                    <div class="text-sm font-semibold text-white">Flujo Exitoso</div>
+                    <div class="text-xs text-slate-400 mt-1">Pago aprobado y stock descontado</div>
+                </button>
+
+                <button onclick="runQuickCase(2)" class="p-3 bg-slate-800 hover:bg-cyan-600/20 border border-slate-700 hover:border-cyan-500/50 rounded-xl text-left transition group">
+                    <div class="text-xs font-bold text-cyan-400 group-hover:text-cyan-300">Caso 2</div>
+                    <div class="text-sm font-semibold text-white">Repetir Solicitud</div>
+                    <div class="text-xs text-slate-400 mt-1">Misma clave -> Sin duplicar cobro</div>
+                </button>
+
+                <button onclick="runQuickCase(3)" class="p-3 bg-slate-800 hover:bg-amber-600/20 border border-slate-700 hover:border-amber-500/50 rounded-xl text-left transition group">
+                    <div class="text-xs font-bold text-amber-400 group-hover:text-amber-300">Caso 3</div>
+                    <div class="text-sm font-semibold text-white">Timeout tras Cobro</div>
+                    <div class="text-xs text-slate-400 mt-1">Pasa a PAGO_INCIERTO para recuperar</div>
+                </button>
+
+                <button onclick="runQuickCase(4)" class="p-3 bg-slate-800 hover:bg-rose-600/20 border border-slate-700 hover:border-rose-500/50 rounded-xl text-left transition group">
+                    <div class="text-xs font-bold text-rose-400 group-hover:text-rose-300">Caso 4</div>
+                    <div class="text-sm font-semibold text-white">Pago Rechazado</div>
+                    <div class="text-xs text-slate-400 mt-1">Libera la reserva automáticamente</div>
+                </button>
+
+                <button onclick="runQuickCase(5)" class="p-3 bg-slate-800 hover:bg-purple-600/20 border border-slate-700 hover:border-purple-500/50 rounded-xl text-left transition group">
+                    <div class="text-xs font-bold text-purple-400 group-hover:text-purple-300">Caso 5</div>
+                    <div class="text-sm font-semibold text-white">Agotar Stock</div>
+                    <div class="text-xs text-slate-400 mt-1">Stock límite nunca negativo</div>
+                </button>
+            </div>
+        </section>
+
+        <!-- Panel Principal: Formulario y Consola -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Formulario para Crear Pedido Manualmente -->
+            <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <div class="border-b border-slate-800 pb-3 flex justify-between items-center">
+                    <h3 class="font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-cart-plus text-indigo-400"></i> Crear Pedido Personalizado
+                    </h3>
+                    <span class="text-xs text-slate-400">POST /orders</span>
+                </div>
+
+                <form id="order-form" onsubmit="handleManualOrder(event)" class="space-y-3.5">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-semibold text-slate-300">Clave de Idempotencia</label>
+                            <button type="button" onclick="generateRandomKey()" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                                <i class="fa-solid fa-dice"></i> Generar Nueva
+                            </button>
+                        </div>
+                        <input type="text" id="idempotency_key" required class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500" placeholder="Ej: KEY-DEMO-001">
+                        <p class="text-[11px] text-slate-500 mt-1">Si repites la misma clave, se demostrará el comportamiento idempotente.</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-300 block mb-1">Producto</label>
+                            <select id="product_id" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+                                <option value="PROD-001">Smartphone Alpha ($500)</option>
+                                <option value="PROD-002">Laptop Ultra ($1200)</option>
+                                <option value="PROD-LIMITED">Edición Coleccionista ($150)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-300 block mb-1">Cantidad</label>
+                            <input type="number" id="quantity" value="1" min="1" max="100" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-semibold text-slate-300 block mb-1">Simulación en Payment Mock</label>
+                        <select id="simulation_mode" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500">
+                            <option value="APPROVE">Aprobar Pago (APPROVE)</option>
+                            <option value="TIMEOUT_AFTER_CHARGE">Timeout tras Cobrar (TIMEOUT_AFTER_CHARGE)</option>
+                            <option value="REJECT">Rechazar Pago (REJECT)</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" id="btn-submit-order" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/25 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>Enviar Pedido</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Consola de Respuesta HTTP -->
+            <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="border-b border-slate-800 pb-3 flex justify-between items-center mb-3">
+                        <h3 class="font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-terminal text-emerald-400"></i> Visor de Respuesta HTTP
+                        </h3>
+                        <span id="response-badge" class="px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-slate-800 text-slate-400">Listo</span>
+                    </div>
+                    <pre id="response-output" class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 overflow-x-auto max-h-64 h-64">// Presiona cualquier botón para enviar solicitudes y ver la respuesta JSON aquí...</pre>
+                </div>
+                <div class="mt-3 text-[11px] text-slate-500 flex justify-between items-center">
+                    <span>Transacción y headers rastreados en tiempo real</span>
+                    <button onclick="clearConsole()" class="hover:text-slate-300">Limpiar</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Tabla de Pedidos y Reconciliación -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-indigo-400"></i> Registro de Pedidos (orders.db)
+                </h3>
+                <span id="orders-count" class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">0 pedidos</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
+                            <th class="py-2.5 px-3">Order ID</th>
+                            <th class="py-2.5 px-3">Clave Idempotencia</th>
+                            <th class="py-2.5 px-3">Producto</th>
+                            <th class="py-2.5 px-3">Cant</th>
+                            <th class="py-2.5 px-3">Monto</th>
+                            <th class="py-2.5 px-3">Estado</th>
+                            <th class="py-2.5 px-3 text-right">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-table-body" class="divide-y divide-slate-800/60 font-mono">
+                        <tr>
+                            <td colspan="7" class="py-4 text-center text-slate-500 font-sans">No hay pedidos registrados</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Tabla de Cobros en Payment Mock -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-receipt text-emerald-400"></i> Registro de Cobros en Payment Mock (payments.db)
+                </h3>
+                <span id="payments-count" class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">0 cobros</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
+                            <th class="py-2.5 px-3">Payment Key (Única)</th>
+                            <th class="py-2.5 px-3">Order ID</th>
+                            <th class="py-2.5 px-3">Monto</th>
+                            <th class="py-2.5 px-3">Estado Mock</th>
+                            <th class="py-2.5 px-3">Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payments-table-body" class="divide-y divide-slate-800/60 font-mono">
+                        <tr>
+                            <td colspan="5" class="py-4 text-center text-slate-500 font-sans">No hay cobros registrados en el mock</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Scripts de Frontend -->
+    <script>
+        let lastCreatedKey = "";
+
+        function generateRandomKey(prefix = "KEY") {
+            const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const key = `${prefix}-${rand}`;
+            document.getElementById("idempotency_key").value = key;
+            return key;
+        }
+
+        function setConsoleResponse(status, data) {
+            const badge = document.getElementById("response-badge");
+            const output = document.getElementById("response-output");
+
+            badge.innerText = `HTTP ${status}`;
+            if (status >= 200 && status < 300) {
+                badge.className = "px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                output.className = "bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 overflow-x-auto max-h-64 h-64";
+            } else if (status === 504 || status === 202) {
+                badge.className = "px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                output.className = "bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-amber-400 overflow-x-auto max-h-64 h-64";
+            } else {
+                badge.className = "px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                output.className = "bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-rose-400 overflow-x-auto max-h-64 h-64";
+            }
+
+            output.innerText = JSON.stringify(data, null, 2);
+        }
+
+        function clearConsole() {
+            document.getElementById("response-badge").innerText = "Listo";
+            document.getElementById("response-badge").className = "px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-slate-800 text-slate-400";
+            document.getElementById("response-output").innerText = "// Consola limpia";
+        }
+
+        async function loadProducts() {
+            try {
+                const res = await fetch("/products");
+                const data = await res.json();
+                const container = document.getElementById("products-container");
+                container.innerHTML = "";
+
+                data.products.forEach(p => {
+                    const isLow = p.stock <= 1;
+                    container.innerHTML += `
+                        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center shadow-lg">
+                            <div>
+                                <span class="text-xs font-mono text-indigo-400">${p.id}</span>
+                                <h4 class="font-bold text-white text-sm">${p.name}</h4>
+                                <span class="text-xs text-slate-400">$${p.price.toFixed(2)}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-slate-400 block">Stock</span>
+                                <span class="text-2xl font-black ${isLow ? 'text-amber-400' : 'text-emerald-400'}">${p.stock}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error al cargar productos:", err);
+            }
+        }
+
+        async function loadOrders() {
+            try {
+                const res = await fetch("/orders");
+                const data = await res.json();
+                const tbody = document.getElementById("orders-table-body");
+                document.getElementById("orders-count").innerText = `${data.count} pedidos`;
+
+                if (data.count === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="py-4 text-center text-slate-500 font-sans">No hay pedidos registrados</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = "";
+                data.orders.forEach(o => {
+                    let badgeClass = "bg-slate-800 text-slate-300";
+                    let actionHtml = `<span class="text-slate-500 text-[11px]">Finalizado</span>`;
+
+                    if (o.status === "PAGADO") {
+                        badgeClass = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                    } else if (o.status === "RECHAZADO") {
+                        badgeClass = "bg-rose-500/20 text-rose-400 border border-rose-500/30";
+                    } else if (o.status === "PAGO_INCIERTO") {
+                        badgeClass = "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse";
+                        actionHtml = `
+                            <button onclick="reconcileOrder('${o.id}')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold font-sans text-xs rounded-lg transition shadow-md shadow-amber-500/20 flex items-center space-x-1 float-right">
+                                <i class="fa-solid fa-arrows-spin"></i>
+                                <span>Reconciliar</span>
+                            </button>
+                        `;
+                    }
+
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-2.5 px-3 font-bold text-slate-200">${o.id}</td>
+                            <td class="py-2.5 px-3 text-slate-400">${o.idempotency_key}</td>
+                            <td class="py-2.5 px-3 text-slate-300">${o.product_name}</td>
+                            <td class="py-2.5 px-3 text-slate-300">${o.quantity}</td>
+                            <td class="py-2.5 px-3 text-slate-200">$${o.total_amount.toFixed(2)}</td>
+                            <td class="py-2.5 px-3">
+                                <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${badgeClass}">${o.status}</span>
+                            </td>
+                            <td class="py-2.5 px-3 text-right">${actionHtml}</td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error al cargar pedidos:", err);
+            }
+        }
+
+        async function loadPayments() {
+            try {
+                const res = await fetch("/mock-payments");
+                const data = await res.json();
+                const tbody = document.getElementById("payments-table-body");
+                document.getElementById("payments-count").innerText = `${data.count || 0} cobros`;
+
+                if (!data.payments || data.payments.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-slate-500 font-sans">No hay cobros registrados en el mock</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = "";
+                data.payments.forEach(p => {
+                    const badgeClass = p.status === "APPROVED" 
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                        : "bg-rose-500/20 text-rose-400 border border-rose-500/30";
+
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="py-2.5 px-3 font-semibold text-slate-200">${p.payment_key}</td>
+                            <td class="py-2.5 px-3 text-slate-400">${p.order_id}</td>
+                            <td class="py-2.5 px-3 text-slate-200">$${p.amount.toFixed(2)}</td>
+                            <td class="py-2.5 px-3">
+                                <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${badgeClass}">${p.status}</span>
+                            </td>
+                            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${p.created_at}</td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error al cargar pagos:", err);
+            }
+        }
+
+        async function loadAllData() {
+            await Promise.all([loadProducts(), loadOrders(), loadPayments()]);
+        }
+
+        async function handleManualOrder(e) {
+            e.preventDefault();
+            const btn = document.getElementById("btn-submit-order");
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Procesando...</span>`;
+
+            const key = document.getElementById("idempotency_key").value.trim();
+            const product_id = document.getElementById("product_id").value;
+            const quantity = parseInt(document.getElementById("quantity").value);
+            const simulation_mode = document.getElementById("simulation_mode").value;
+
+            lastCreatedKey = key;
+
+            try {
+                const res = await fetch("/orders", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Idempotency-Key": key
+                    },
+                    body: JSON.stringify({ product_id, quantity, simulation_mode })
+                });
+
+                const data = await res.json();
+                setConsoleResponse(res.status, data);
+            } catch (err) {
+                setConsoleResponse(500, { error: "Fallo de conexión", details: err.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i><span>Enviar Pedido</span>`;
+                loadAllData();
+            }
+        }
+
+        async function reconcileOrder(orderId) {
+            try {
+                const res = await fetch(`/orders/${orderId}/reconcile`, { method: "POST" });
+                const data = await res.json();
+                setConsoleResponse(res.status, data);
+            } catch (err) {
+                setConsoleResponse(500, { error: "Error de reconciliación", details: err.message });
+            } finally {
+                loadAllData();
+            }
+        }
+
+        async function resetDatabase() {
+            if (!confirm("¿Deseas reiniciar las bases de datos a su estado inicial?")) return;
+            try {
+                const res = await fetch("/admin/reset", { method: "POST" });
+                const data = await res.json();
+                // Reset mock también
+                await fetch("http://127.0.0.1:5002/admin/reset", { method: "POST" }).catch(() => {});
+                setConsoleResponse(res.status, data);
+                generateRandomKey();
+            } catch (err) {
+                console.error("Error al resetear:", err);
+            } finally {
+                loadAllData();
+            }
+        }
+
+        async function runQuickCase(caseNum) {
+            if (caseNum === 1) {
+                const key = generateRandomKey("CASE1");
+                lastCreatedKey = key;
+                const res = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+                    body: JSON.stringify({ product_id: "PROD-001", quantity: 1, simulation_mode: "APPROVE" })
+                });
+                setConsoleResponse(res.status, await res.json());
+            } else if (caseNum === 2) {
+                if (!lastCreatedKey) {
+                    alert("Primero ejecuta el Caso 1 para tener una clave que repetir.");
+                    return;
+                }
+                document.getElementById("idempotency_key").value = lastCreatedKey;
+                const res = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Idempotency-Key": lastCreatedKey },
+                    body: JSON.stringify({ product_id: "PROD-001", quantity: 1, simulation_mode: "APPROVE" })
+                });
+                setConsoleResponse(res.status, await res.json());
+            } else if (caseNum === 3) {
+                const key = generateRandomKey("CASE3-TIMEOUT");
+                lastCreatedKey = key;
+                const res = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+                    body: JSON.stringify({ product_id: "PROD-001", quantity: 1, simulation_mode: "TIMEOUT_AFTER_CHARGE" })
+                });
+                setConsoleResponse(res.status, await res.json());
+            } else if (caseNum === 4) {
+                const key = generateRandomKey("CASE4-REJECT");
+                const res = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+                    body: JSON.stringify({ product_id: "PROD-001", quantity: 1, simulation_mode: "REJECT" })
+                });
+                setConsoleResponse(res.status, await res.json());
+            } else if (caseNum === 5) {
+                const keyA = generateRandomKey("CASE5-A");
+                const resA = await fetch("/orders", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Idempotency-Key": keyA },
+                    body: JSON.stringify({ product_id: "PROD-LIMITED", quantity: 1, simulation_mode: "APPROVE" })
+                });
+                const dataA = await resA.json();
+
+                // Intentar una segunda compra con otra clave
+                setTimeout(async () => {
+                    const keyB = generateRandomKey("CASE5-B");
+                    const resB = await fetch("/orders", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Idempotency-Key": keyB },
+                        body: JSON.stringify({ product_id: "PROD-LIMITED", quantity: 1, simulation_mode: "APPROVE" })
+                    });
+                    const dataB = await resB.json();
+                    setConsoleResponse(resB.status, {
+                        primera_compra: dataA,
+                        segundo_intento_sin_stock: dataB
+                    });
+                    loadAllData();
+                }, 500);
+            }
+            loadAllData();
+        }
+
+        // Inicialización
+        generateRandomKey();
+        loadAllData();
+        // Polling suave cada 4 segundos
+        setInterval(loadAllData, 4000);
+    </script>
+</body>
+</html>
