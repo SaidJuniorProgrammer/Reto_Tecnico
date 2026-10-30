@@ -1,0 +1,418 @@
+{
+	"info": {
+		"_postman_id": "d9834b6b-8712-4d92-9112-9218d6a89ef1",
+		"name": "Reto Técnico - Pedidos, Pagos e Idempotencia",
+		"description": "Colección completa para reproducir y demostrar los 5 casos obligatorios de la rúbrica.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Utilidades y Verificación",
+			"item": [
+				{
+					"name": "Health Check - Order API",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{order_api_url}}/health",
+							"host": ["{{order_api_url}}"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check - Payment Mock API",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{payment_api_url}}/health",
+							"host": ["{{payment_api_url}}"],
+							"path": ["health"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Consultar Inventario y Productos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{order_api_url}}/products",
+							"host": ["{{order_api_url}}"],
+							"path": ["products"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reiniciar Bases de Datos (Reset)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{order_api_url}}/admin/reset",
+							"host": ["{{order_api_url}}"],
+							"path": ["admin", "reset"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Caso 1 - Flujo Exitoso",
+			"item": [
+				{
+					"name": "1. Crear Pedido (Pago Aprobado)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code es 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Pedido queda en estado PAGADO\", function () {",
+									"    pm.expect(jsonData.status).to.eql(\"PAGADO\");",
+									"    pm.expect(jsonData.reservation.status).to.eql(\"COMMITTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-1",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-001\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"APPROVE\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Caso 2 - Repetición de la Misma Solicitud",
+			"item": [
+				{
+					"name": "2. Reenviar Pedido con Misma Clave (Idempotencia)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code es 200 (Replay Idempotente)\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Reconocido como replay y mismo pedido devuelto\", function () {",
+									"    pm.expect(jsonData.idempotent_replay).to.eql(true);",
+									"    pm.expect(jsonData.order.status).to.eql(\"PAGADO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-1",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-001\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"APPROVE\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Caso 3 - Timeout tras Cobro y Recuperación",
+			"item": [
+				{
+					"name": "3.1 Crear Pedido (Timeout simulado tras cobrar)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code es 504 (Timeout)\", function () {",
+									"    pm.response.to.have.status(504);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Pedido en PAGO_INCIERTO\", function () {",
+									"    pm.expect(jsonData.status).to.eql(\"PAGO_INCIERTO\");",
+									"    pm.environment.set(\"caso3_order_id\", jsonData.order_id);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-3",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-001\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"TIMEOUT_AFTER_CHARGE\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3.2 Inspeccionar Mock (Cobro guardado en Mock)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"El pago fue efectivamente registrado en Mock como APPROVED\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.status).to.eql(\"APPROVED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{payment_api_url}}/payments/CLAVE-PRUEBA-CASO-3",
+							"host": ["{{payment_api_url}}"],
+							"path": ["payments", "CLAVE-PRUEBA-CASO-3"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3.3 Recuperar / Reconciliar Pedido Incierto",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Reconciliación exitosa pasa a PAGADO sin duplicar cobro\", function () {",
+									"    pm.response.to.have.status(200);",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.order.status).to.eql(\"PAGADO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{order_api_url}}/orders/{{caso3_order_id}}/reconcile",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders", "{{caso3_order_id}}", "reconcile"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Caso 4 - Pago Rechazado y Compensación",
+			"item": [
+				{
+					"name": "4. Crear Pedido (Pago Rechazado)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code es 400 (Rechazado)\", function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.test(\"Pedido RECHAZADO y reserva RELEASED\", function () {",
+									"    pm.expect(jsonData.status).to.eql(\"RECHAZADO\");",
+									"    pm.expect(jsonData.reservation.status).to.eql(\"RELEASED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-4",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-001\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"REJECT\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Caso 5 - Otra Intención de Compra (Stock Nunca Negativo)",
+			"item": [
+				{
+					"name": "5.1 Compra de la última unidad (Clave A)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Compra exitosa de la última unidad disponible\", function () {",
+									"    pm.response.to.have.status(201);",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.status).to.eql(\"PAGADO\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-5-A",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-LIMITED\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"APPROVE\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5.2 Intento con clave distinta sin stock (Clave B)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Falla por stock insuficiente (Stock nunca negativo)\", function () {",
+									"    pm.response.to.have.status(400);",
+									"    var data = pm.response.json();",
+									"    pm.expect(data.error).to.include(\"Stock insuficiente\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Idempotency-Key",
+								"value": "CLAVE-PRUEBA-CASO-5-B",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_id\": \"PROD-LIMITED\",\n    \"quantity\": 1,\n    \"simulation_mode\": \"APPROVE\"\n}"
+						},
+						"url": {
+							"raw": "{{order_api_url}}/orders",
+							"host": ["{{order_api_url}}"],
+							"path": ["orders"]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
