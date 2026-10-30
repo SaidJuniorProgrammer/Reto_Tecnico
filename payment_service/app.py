@@ -12,6 +12,25 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 init_db()
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify({
+        "service": "Payment Mock API",
+        "status": "ONLINE",
+        "message": "Pasarela de pagos simulada con soporte de idempotencia y timeouts.",
+        "endpoints": {
+            "GET /health": "Verificar salud del servicio",
+            "POST /payments": "Procesar pago (simulation_mode: APPROVE | REJECT | TIMEOUT_AFTER_CHARGE)",
+            "GET /payments/<payment_key>": "Consultar estado de un pago por clave",
+            "GET /payments": "Listar todos los pagos registrados",
+            "POST /admin/reset": "Reiniciar base de datos"
+        }
+    }), 200
+
+@app.route("/favicon.ico", methods=["GET"])
+def favicon():
+    return "", 204
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "UP", "service": "Payment Mock API"}), 200

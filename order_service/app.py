@@ -34,6 +34,28 @@ init_db()
 PAYMENT_SERVICE_URL = os.environ.get("PAYMENT_SERVICE_URL", "http://127.0.0.1:5002")
 PAYMENT_TIMEOUT_SECONDS = float(os.environ.get("PAYMENT_TIMEOUT_SECONDS", "2.0"))
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify({
+        "service": "Order API",
+        "status": "ONLINE",
+        "message": "Servicio de Pedidos y Gestion de Idempotencia activo.",
+        "endpoints": {
+            "GET /health": "Verificar salud del servicio",
+            "GET /products": "Consultar catalogo y stock en tiempo real",
+            "POST /orders": "Crear pedido con clave de idempotencia (Header Idempotency-Key)",
+            "GET /orders": "Listar todos los pedidos",
+            "GET /orders/<id>": "Consultar detalle de un pedido",
+            "POST /orders/<id>/reconcile": "Reconciliar pedido en PAGO_INCIERTO",
+            "GET /reservations": "Listar reservas de stock",
+            "POST /admin/reset": "Reiniciar base de datos a estado inicial"
+        }
+    }), 200
+
+@app.route("/favicon.ico", methods=["GET"])
+def favicon():
+    return "", 204
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "UP", "service": "Order API"}), 200
