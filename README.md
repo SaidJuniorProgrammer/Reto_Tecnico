@@ -10,7 +10,7 @@ Este repositorio contiene la solución completa al reto técnico de sistemas dis
   - [Nombre Integrante 1]
   - [Nombre Integrante 2]
   - [Nombre Integrante 3]
-- **Repositorio**: `[Enlace a tu repositorio de GitHub / GitLab]`
+- **Repositorio**: https://github.com/SaidJuniorProgrammer/Reto_Tecnico.git
 - **Video Demostrativo (3 a 5 min)**: `[Enlace al video en YouTube / Drive / Loom]`
 
 ---
@@ -140,6 +140,20 @@ python scripts/run_servers.py
   ```powershell
   python order_service/app.py
   ```
+
+---
+
+## 🖥️ Panel de Control Web Interactivo
+
+Una vez iniciados los servicios, abre en cualquier navegador:
+👉 **[http://127.0.0.1:5001/](http://127.0.0.1:5001/)**
+
+Desde este panel podrás:
+- **Monitorear inventario en tiempo real**: Visualiza el stock de cada producto y sus descuentos/compensaciones inmediatas.
+- **Ejecutar los 5 casos con 1 clic**: Botones directos para disparar cada escenario de la rúbrica.
+- **Reconciliación interactiva**: En el Caso 3 (timeout tras cobro), verás el pedido en estado ámbar `PAGO_INCIERTO` y podrás presionar el botón **"Reconciliar"** para verificar el pago y transicionarlo a `PAGADO` sin duplicar cobros a ciegas.
+- **Auditoría visual de bases de datos**: Muestra en tiempo real las tablas de `orders.db` y `payments.db`.
+- **Botón Reset DB**: Para reiniciar las bases de datos a su estado original al instante.
 
 ---
 
